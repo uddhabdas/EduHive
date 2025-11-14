@@ -1,0 +1,8 @@
+{
+  "name": "eduhive-root",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev:usb": "node scripts/dev-usb.js"
+  }
+}
