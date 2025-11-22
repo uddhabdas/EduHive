@@ -17,13 +17,38 @@ router.post('/courses/:courseId/purchase', auth, async (req, res) => {
       return res.status(404).json({ error: 'Course not found' });
     }
 
-    if (!course.isPaid || course.price <= 0) {
-      return res.status(400).json({ error: 'This course is free' });
-    }
-
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // For free courses, allow enrollment without payment
+    if (!course.isPaid || course.price <= 0) {
+      // Check if already enrolled
+      const existingPurchase = await CoursePurchase.findOne({
+        userId: user._id,
+        courseId: course._id,
+        status: 'completed',
+      });
+
+      if (existingPurchase) {
+        return res.status(400).json({ error: 'Course already enrolled' });
+      }
+
+      // Create free enrollment record
+      const purchase = await CoursePurchase.create({
+        userId: user._id,
+        courseId: course._id,
+        amount: 0,
+        status: 'completed',
+        transactionId: `FREE-${Date.now()}`,
+      });
+
+      return res.json({
+        message: 'Course enrolled successfully',
+        purchase,
+        newBalance: user.walletBalance,
+      });
     }
 
     // Check if already purchased

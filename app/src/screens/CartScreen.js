@@ -55,30 +55,70 @@ export default function CartScreen({ navigation }) {
           text: 'Purchase',
           onPress: async () => {
             setProcessing(true);
+            const failedCourses = [];
+            const successfulCourses = [];
+            
             try {
               // Purchase each course
               for (const item of items) {
                 try {
-                  await api.post(`/api/courses/${item._id}/purchase`);
+                  const response = await api.post(`/api/courses/${item._id}/purchase`);
+                  if (response.status >= 200 && response.status < 300) {
+                    successfulCourses.push(item.title);
+                  } else {
+                    failedCourses.push({ title: item.title, error: response.data?.error || 'Unknown error' });
+                  }
                 } catch (e) {
                   console.error(`Failed to purchase course ${item._id}:`, e);
+                  const errorMsg = e.response?.data?.error || e.message || 'Purchase failed';
+                  failedCourses.push({ title: item.title, error: errorMsg });
                 }
               }
 
               // Refresh wallet balance
               await loadWalletBalance();
               
-              Alert.alert('Success', 'Courses purchased successfully!', [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    clear();
-                    navigation.navigate('Courses');
+              // Show appropriate message based on results
+              if (failedCourses.length === 0) {
+                // All successful
+                Alert.alert('Success', 'All courses purchased successfully!', [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      clear();
+                      navigation.navigate('Courses');
+                    },
                   },
-                },
-              ]);
+                ]);
+              } else if (successfulCourses.length > 0) {
+                // Partial success
+                Alert.alert(
+                  'Partial Success',
+                  `${successfulCourses.length} course(s) purchased successfully.\n\nFailed:\n${failedCourses.map(f => `• ${f.title}: ${f.error}`).join('\n')}`,
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        // Remove successful courses from cart
+                        items.forEach(item => {
+                          if (successfulCourses.includes(item.title)) {
+                            remove(item._id);
+                          }
+                        });
+                      },
+                    },
+                  ]
+                );
+              } else {
+                // All failed
+                Alert.alert(
+                  'Purchase Failed',
+                  `Failed to purchase courses:\n${failedCourses.map(f => `• ${f.title}: ${f.error}`).join('\n')}`
+                );
+              }
             } catch (e) {
-              Alert.alert('Error', e.response?.data?.error || 'Failed to complete purchase');
+              console.error('Checkout error:', e);
+              Alert.alert('Error', e.response?.data?.error || e.message || 'Failed to complete purchase');
             } finally {
               setProcessing(false);
             }

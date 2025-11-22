@@ -7,17 +7,28 @@ const router = express.Router();
 
 router.post('/register', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { name, email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
 
     const existing = await User.findOne({ email });
     if (existing) return res.status(409).json({ error: 'Email already registered' });
 
     const hash = await bcrypt.hash(password, 10);
-    const user = await User.create({ email, password: hash });
+    const user = await User.create({ name: name.trim(), email, password: hash });
 
     const token = jwt.sign({ _id: user._id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    return res.status(201).json({ token });
+
+    // Return both token and a minimal user object so the client can immediately show the name
+    return res.status(201).json({
+      token,
+      user: {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        name: user.name,
+      },
+    });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'Server error' });

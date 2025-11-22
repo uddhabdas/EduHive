@@ -23,6 +23,10 @@ export function ThemeProvider({ children }) {
   const setTheme = async (next) => {
     setMode(next);
     await AsyncStorage.setItem('theme_mode', next);
+    // Force update resolved theme
+    if (next !== 'system') {
+      setResolved(next);
+    }
   };
 
   // keep NativeWind color scheme in sync

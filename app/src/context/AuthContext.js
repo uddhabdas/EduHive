@@ -27,14 +27,17 @@ export function AuthProvider({ children }) {
     try {
       const t = overrideToken || token;
       if (!t) return;
-      const res = await api.get('/api/me', {
-        headers: { Authorization: `Bearer ${t}` },
-      });
+      setAuthToken(t);
+      const res = await api.get('/api/me');
       setUser(res.data);
     } catch (e) {
       // token invalid or server down
-      console.warn('Failed to fetch /api/me');
+      console.warn('Failed to fetch /api/me:', e.message);
     }
+  };
+
+  const updateUser = async () => {
+    await fetchMe();
   };
 
   const login = async (email, password) => {
@@ -46,13 +49,18 @@ export function AuthProvider({ children }) {
     await fetchMe(t);
   };
 
-  const register = async (email, password) => {
-    const res = await api.post('/api/auth/register', { email, password });
+  const register = async (name, email, password) => {
+    const res = await api.post('/api/auth/register', { name, email, password });
     const t = res.data.token;
     setToken(t);
     setAuthToken(t);
     await AsyncStorage.setItem('auth_token', t);
+    // Fetch user data immediately after registration
     await fetchMe(t);
+    // Also set user from response if available
+    if (res.data.user) {
+      setUser(res.data.user);
+    }
   };
 
   const logout = async () => {
@@ -62,7 +70,7 @@ export function AuthProvider({ children }) {
     await AsyncStorage.removeItem('auth_token');
   };
 
-  const value = useMemo(() => ({ token, user, loading, login, register, logout }), [token, user, loading]);
+  const value = useMemo(() => ({ token, user, loading, login, register, logout, updateUser }), [token, user, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

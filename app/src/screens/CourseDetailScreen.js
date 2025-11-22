@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { View, Text, Pressable, ScrollView, Image, Animated, Easing } from 'react-native';
+import { View, Text, Pressable, ScrollView, Image, Animated, Easing, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Svg, { Circle } from 'react-native-svg';
@@ -69,10 +69,17 @@ function LectureListItem({ item, index, onPress, progress }) {
       onPress={onPress}
       className={`flex-row items-center p-4 border-b border-neutral-200 dark:border-neutral-800`}
     >
-      <Text className="w-6 text-xs text-neutral-500">{index + 1}.</Text>
-      <Image source={{ uri: item.thumbnailUrl || 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg' }}
-             className="w-16 h-9 mx-3 rounded-md" resizeMode="cover"
-             onError={(e) => { /* show a neutral block on error */ }} />
+      <Text className="w-6 text-xs text-neutral-500 dark:text-neutral-400">{index + 1}.</Text>
+      <Image 
+        source={{ 
+          uri: item.thumbnailUrl || 
+               (item.videoId ? `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg` : 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg')
+        }}
+        className="w-16 h-9 mx-3 rounded-md" 
+        resizeMode="cover"
+        onError={() => {}}
+        defaultSource={require('../../assets/images/logo.jpg')}
+      />
       <View className="flex-1">
         <View className="flex-row items-center justify-between">
           <Text className="flex-1 text-base font-semibold text-neutral-900 dark:text-white" numberOfLines={2}>
@@ -123,12 +130,27 @@ export default function CourseDetailScreen({ route, navigation }) {
     try {
       // Try to get full course details from admin API (if available) or use basic info
       const [courseRes, purchasedRes, walletRes] = await Promise.all([
-        api.get(`/api/courses/${id}`).catch(() => ({ data: null })),
+        api.get(`/api/courses/${id}`).catch((err) => {
+          console.warn('Failed to load course details:', err);
+          return { data: null };
+        }),
         api.get(`/api/courses/${id}/purchased`).catch(() => ({ data: { purchased: false } })),
         api.get('/api/wallet/balance').catch(() => ({ data: { balance: 0 } })),
       ]);
       
-      setCourseDetails(courseRes.data);
+      if (courseRes.data) {
+        setCourseDetails(courseRes.data);
+      } else {
+        // Fallback to route params if API fails
+        setCourseDetails({
+          _id: id,
+          title: title,
+          description: description,
+          thumbnailUrl: thumbnailUrl,
+          isPaid: false,
+          price: 0,
+        });
+      }
       setPurchased(purchasedRes.data.purchased || false);
       setWalletBalance(walletRes.data.balance || 0);
     } catch (e) {
@@ -137,19 +159,66 @@ export default function CourseDetailScreen({ route, navigation }) {
   };
 
   const handlePurchase = async () => {
-    if (!courseDetails || !courseDetails.isPaid || courseDetails.price <= 0) {
-      // Free course - just add to cart or enroll directly
-      add({ _id: id, title: cleanTitle || title, price: 0 });
+    if (purchasing) return;
+
+    if (!courseDetails) {
+      Alert.alert('Error', 'Course details not loaded. Please try again.');
       return;
+    }
+
+    // Free course – enroll directly without wallet/cart
+    if (!courseDetails.isPaid || courseDetails.price <= 0) {
+      try {
+        setPurchasing(true);
+        await api.post(`/api/courses/${id}/purchase`);
+        await loadCourseDetails();
+        Alert.alert('Enrolled', 'This free course has been added to My Courses.');
+      } catch (e) {
+        const msg = e?.response?.data?.error || 'Failed to enroll in free course';
+        Alert.alert('Enrollment Failed', msg);
+      } finally {
+        setPurchasing(false);
+      }
+      return;
+    }
+
+    // Re-check purchased status before attempting purchase
+    try {
+      const purchasedCheck = await api.get(`/api/courses/${id}/purchased`);
+      if (purchasedCheck.data?.purchased) {
+        Alert.alert('Already Purchased', 'You have already purchased this course.');
+        await loadCourseDetails(); // Refresh UI
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to check purchase status:', e);
     }
 
     if (purchased) {
-      // Already purchased
+      Alert.alert('Already Purchased', 'You have already purchased this course.');
       return;
     }
 
+    // Re-check wallet balance
+    try {
+      const walletRes = await api.get('/api/wallet/balance');
+      const currentBalance = walletRes.data?.balance || 0;
+      if (currentBalance < courseDetails.price) {
+        Alert.alert(
+          'Insufficient Balance',
+          `You need ₹${courseDetails.price.toFixed(2)} but only have ₹${currentBalance.toFixed(2)} in your wallet.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Add Money', onPress: () => navigation.navigate('WalletTopUp') },
+          ]
+        );
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to check wallet balance:', e);
+    }
+
     if (walletBalance < courseDetails.price) {
-      const { Alert } = require('react-native');
       Alert.alert(
         'Insufficient Balance',
         `You need ₹${courseDetails.price.toFixed(2)} but only have ₹${walletBalance.toFixed(2)} in your wallet.`,
@@ -161,7 +230,6 @@ export default function CourseDetailScreen({ route, navigation }) {
       return;
     }
 
-    const { Alert } = require('react-native');
     Alert.alert(
       'Purchase Course',
       `Purchase "${cleanTitle || title}" for ₹${courseDetails.price.toFixed(2)}?`,
@@ -170,13 +238,65 @@ export default function CourseDetailScreen({ route, navigation }) {
         {
           text: 'Purchase',
           onPress: async () => {
+            // Prevent double-clicking
+            if (purchasing) {
+              return;
+            }
+            
             setPurchasing(true);
             try {
-              await api.post(`/api/courses/${id}/purchase`);
-              await loadCourseDetails();
-              Alert.alert('Success', 'Course purchased successfully!');
+              console.log('Attempting purchase for course:', id);
+              const response = await api.post(`/api/courses/${id}/purchase`);
+              
+              // Explicitly check response status
+              if (response.status >= 200 && response.status < 300) {
+                // Success - reload course details and show success
+                console.log('Purchase successful:', response.data);
+                // Immediately update purchased state
+                setPurchased(true);
+                // Update wallet balance from response
+                if (response.data?.newBalance !== undefined) {
+                  setWalletBalance(response.data.newBalance);
+                }
+                await loadCourseDetails();
+                Alert.alert('Success', 'Course purchased successfully!');
+              } else {
+                // Unexpected status code
+                const errorMsg = response.data?.error || 'Purchase failed. Please try again.';
+                console.error('Unexpected status:', response.status, response.data);
+                Alert.alert('Purchase Failed', errorMsg);
+              }
             } catch (e) {
-              Alert.alert('Error', e.response?.data?.error || 'Failed to purchase course');
+              console.error('Purchase error:', e);
+              console.error('Error response:', e.response?.data);
+              console.error('Error status:', e.response?.status);
+              console.error('Error config:', e.config);
+              
+              // Handle different error types
+              let errorMsg = 'Failed to purchase course';
+              
+              if (e.response) {
+                // Server responded with error
+                const status = e.response.status;
+                const data = e.response.data;
+                
+                if (status === 400) {
+                  // Specific 400 error messages
+                  errorMsg = data?.error || 'Purchase failed. Please check your wallet balance or if the course is already purchased.';
+                } else if (status === 404) {
+                  errorMsg = data?.error || 'Course or user not found.';
+                } else {
+                  errorMsg = data?.error || `Server error (${status})`;
+                }
+              } else if (e.request) {
+                // Request made but no response
+                errorMsg = 'No response from server. Please check your connection.';
+              } else {
+                // Error setting up request
+                errorMsg = e.message || 'Network error. Please try again.';
+              }
+              
+              Alert.alert('Purchase Failed', errorMsg);
             } finally {
               setPurchasing(false);
             }
@@ -369,38 +489,95 @@ export default function CourseDetailScreen({ route, navigation }) {
                     <Text className="text-emerald-600 dark:text-emerald-400 font-semibold">✓ Purchased</Text>
                   </View>
                 ) : (
-                  <View>
-                    <View className="flex-row items-center mb-2">
-                      <Text className="text-white text-2xl font-bold mr-2">₹{courseDetails.price.toFixed(2)}</Text>
-                      {walletBalance < courseDetails.price && (
-                        <View className="bg-yellow-500/20 px-2 py-1 rounded">
-                          <Text className="text-yellow-300 text-xs">Low Balance</Text>
-                        </View>
-                      )}
+                  <View className="w-full">
+                    <View className="flex-row items-center justify-between mb-3">
+                      <View className="flex-row items-baseline">
+                        <Text className="text-white text-3xl font-bold mr-2">₹{courseDetails.price.toFixed(2)}</Text>
+                        {walletBalance < courseDetails.price && (
+                          <View className="bg-yellow-500/20 border border-yellow-500/30 px-2 py-1 rounded-lg">
+                            <Text className="text-yellow-300 text-xs font-medium">Low Balance</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
-                    <Pressable
-                      onPress={handlePurchase}
-                      disabled={purchasing || walletBalance < courseDetails.price}
-                      style={{ borderRadius: 9999, overflow: 'hidden', alignSelf: 'flex-start', opacity: (purchasing || walletBalance < courseDetails.price) ? 0.6 : 1 }}
-                    >
-                      <LinearGradient colors={["#14B8A6", "#10B981"]} start={{x:0,y:0}} end={{x:1,y:1}} style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 9999, shadowColor:'#000', shadowOffset:{width:0,height:8}, shadowOpacity:0.2, shadowRadius:16, elevation:4 }}>
-                        <Text className="text-white font-bold">{purchasing ? 'Processing...' : 'Purchase with Wallet'}</Text>
-                      </LinearGradient>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => add({ _id: id, title: cleanTitle || title, price: courseDetails.price })}
-                      className="mt-2"
-                    >
-                      <Text className="text-white/80 text-sm underline">Add to Cart</Text>
-                    </Pressable>
+                    <View className="flex-row gap-3 items-center">
+                      <Pressable
+                        onPress={handlePurchase}
+                        disabled={purchasing || purchased || walletBalance < courseDetails.price}
+                        style={{ 
+                          flex: 1,
+                          borderRadius: 12, 
+                          overflow: 'hidden', 
+                          opacity: (purchasing || purchased || walletBalance < courseDetails.price) ? 0.6 : 1 
+                        }}
+                      >
+                        <LinearGradient 
+                          colors={["#14B8A6", "#10B981"]} 
+                          start={{x:0,y:0}} 
+                          end={{x:1,y:1}} 
+                          style={{ 
+                            paddingHorizontal: 20, 
+                            paddingVertical: 14, 
+                            borderRadius: 12,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            shadowColor:'#000', 
+                            shadowOffset:{width:0,height:4}, 
+                            shadowOpacity:0.3, 
+                            shadowRadius:8, 
+                            elevation:5 
+                          }}
+                        >
+                          <Text className="text-white font-bold text-base">
+                            {purchasing ? 'Processing...' : 'Purchase Now'}
+                          </Text>
+                        </LinearGradient>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => add({ _id: id, title: cleanTitle || title, price: courseDetails.price })}
+                        style={{ 
+                          width: 50,
+                          height: 50,
+                          borderRadius: 12,
+                          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                          borderWidth: 1,
+                          borderColor: 'rgba(255, 255, 255, 0.2)',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <MaterialCommunityIcons name="cart-plus" size={22} color="#FFFFFF" />
+                      </Pressable>
+                    </View>
                   </View>
                 )
               ) : (
-                <Pressable onPress={() => add({ _id: id, title: cleanTitle || title, price: 0 })}
-                  style={{ borderRadius: 9999, overflow: 'hidden', alignSelf: 'flex-start' }}
+                <Pressable
+                  onPress={handlePurchase}
+                  style={{ borderRadius: 12, overflow: 'hidden' }}
+                  disabled={purchasing}
                 >
-                  <LinearGradient colors={["#14B8A6", "#10B981"]} start={{x:0,y:0}} end={{x:1,y:1}} style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 9999, shadowColor:'#000', shadowOffset:{width:0,height:8}, shadowOpacity:0.2, shadowRadius:16, elevation:4 }}>
-                    <Text className="text-white font-bold">Enroll Now</Text>
+                  <LinearGradient
+                    colors={["#14B8A6", "#10B981"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                      paddingHorizontal: 20,
+                      paddingVertical: 14,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 8,
+                      elevation: 5,
+                      opacity: purchasing ? 0.6 : 1,
+                    }}
+                  >
+                    <Text className="text-white font-bold text-base">
+                      {purchasing ? 'Enrolling...' : 'Enroll Now'}
+                    </Text>
                   </LinearGradient>
                 </Pressable>
               )}
@@ -493,9 +670,24 @@ export default function CourseDetailScreen({ route, navigation }) {
               </Text>
               <Pressable
                 onPress={handlePurchase}
-                className="mt-6 bg-emerald-600 rounded-xl px-6 py-3"
+                disabled={purchasing}
+                style={{ 
+                  marginTop: 24, 
+                  backgroundColor: '#10B981', 
+                  borderRadius: 12, 
+                  paddingHorizontal: 24, 
+                  paddingVertical: 14,
+                  opacity: purchasing ? 0.6 : 1,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 5,
+                }}
               >
-                <Text className="text-white font-bold">Purchase for ₹{courseDetails.price.toFixed(2)}</Text>
+                <Text className="text-white font-bold text-base">
+                  {purchasing ? 'Processing...' : `Purchase for ₹${courseDetails.price.toFixed(2)}`}
+                </Text>
               </Pressable>
             </View>
           ) : (
@@ -518,15 +710,40 @@ export default function CourseDetailScreen({ route, navigation }) {
                   onTick={debouncedHandleTick}
                   onEnded={handleEnded}
                 />
+              ) : selected?.videoId ? (
+                <View className="flex-1 items-center justify-center bg-neutral-900">
+                  <MaterialCommunityIcons name="play-circle-outline" size={64} color="#9CA3AF" />
+                  <Text className="text-white text-lg font-semibold mt-4">YouTube Video</Text>
+                  <Text className="text-neutral-400 text-sm mt-2 text-center px-8">
+                    Tap to open in YouTube
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      const { Linking } = require('react-native');
+                      Linking.openURL(`https://youtube.com/watch?v=${selected.videoId}`);
+                    }}
+                    className="mt-4 bg-red-600 rounded-xl px-6 py-3"
+                  >
+                    <Text className="text-white font-bold">Open in YouTube</Text>
+                  </Pressable>
+                </View>
               ) : null}
             </View>
           )}
-          {!selected?.videoUrl && (
+          {!selected?.videoUrl && !selected?.videoId && (
             <View className="mt-3">
-              <View className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4">
-                <Text className="text-yellow-800">
-                  No video file set for this lecture. Add a `videoUrl` field to this lecture (MP4/HTTP or local file URL), then reload.
-                </Text>
+              <View className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-2xl p-4">
+                <View className="flex-row items-start">
+                  <MaterialCommunityIcons name="alert-circle" size={20} color="#F59E0B" className="mr-2" />
+                  <View className="flex-1">
+                    <Text className="text-yellow-800 dark:text-yellow-300 font-semibold mb-1">
+                      No Video Available
+                    </Text>
+                    <Text className="text-yellow-700 dark:text-yellow-400 text-sm">
+                      This lecture doesn't have a video yet. Please check back later or contact support.
+                    </Text>
+                  </View>
+                </View>
               </View>
             </View>
           )}

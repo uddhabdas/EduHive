@@ -1,12 +1,38 @@
 const express = require('express');
+const multer = require('multer');
 const { adminAuth } = require('../middleware/adminAuth');
 const Course = require('../models/Course');
 const Lecture = require('../models/Lecture');
 const User = require('../models/User');
 const WalletTransaction = require('../models/WalletTransaction');
 const bcrypt = require('bcrypt');
+const { uploadVideo, deleteVideo } = require('../services/s3Service');
 
 const router = express.Router();
+
+// Configure multer for memory storage (we'll upload directly to S3)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 500 * 1024 * 1024, // 500MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept video files
+    const allowedMimes = [
+      'video/mp4',
+      'video/mpeg',
+      'video/quicktime',
+      'video/x-msvideo',
+      'video/webm',
+      'video/x-matroska',
+    ];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only video files are allowed.'), false);
+    }
+  },
+});
 
 // ========== COURSE MANAGEMENT ==========
 
@@ -40,12 +66,10 @@ router.post('/courses', adminAuth, async (req, res) => {
       about,
       highlights,
       thumbnailUrl, 
-      source, 
-      sourcePlaylistId,
       price,
       isPaid,
       notes,
-      videoUrl
+      videoUrl,
     } = req.body;
     if (!title) return res.status(400).json({ error: 'Title is required' });
 
@@ -55,8 +79,9 @@ router.post('/courses', adminAuth, async (req, res) => {
       about: about || '',
       highlights: Array.isArray(highlights) ? highlights : [],
       thumbnailUrl: thumbnailUrl || '',
-      source: source || 'youtube',
-      sourcePlaylistId: sourcePlaylistId || '',
+      // All courses are now treated as locally managed (no external YouTube playlist).
+      source: 'local',
+      sourcePlaylistId: '',
       isActive: true,
       lectureCount: 0,
       price: price || 0,
@@ -81,13 +106,11 @@ router.put('/courses/:id', adminAuth, async (req, res) => {
       about,
       highlights,
       thumbnailUrl, 
-      source, 
-      sourcePlaylistId, 
       isActive,
       price,
       isPaid,
       notes,
-      videoUrl
+      videoUrl,
     } = req.body;
     const course = await Course.findById(req.params.id);
     if (!course) return res.status(404).json({ error: 'Course not found' });
@@ -97,8 +120,6 @@ router.put('/courses/:id', adminAuth, async (req, res) => {
     if (about !== undefined) course.about = about;
     if (highlights !== undefined) course.highlights = Array.isArray(highlights) ? highlights : [];
     if (thumbnailUrl !== undefined) course.thumbnailUrl = thumbnailUrl;
-    if (source) course.source = source;
-    if (sourcePlaylistId !== undefined) course.sourcePlaylistId = sourcePlaylistId;
     if (isActive !== undefined) course.isActive = isActive;
     if (price !== undefined) course.price = price;
     if (isPaid !== undefined) course.isPaid = isPaid;
@@ -157,16 +178,16 @@ router.post('/courses/:courseId/lectures', adminAuth, async (req, res) => {
     const course = await Course.findById(req.params.courseId);
     if (!course) return res.status(404).json({ error: 'Course not found' });
 
-    const { title, videoId, videoUrl, orderIndex, isLocked, duration, thumbnailUrl, notes, notesFileUrl } = req.body;
-    if (!title || (!videoId && !videoUrl)) {
-      return res.status(400).json({ error: 'Title and videoId or videoUrl are required' });
+    const { title, videoUrl, videoId, orderIndex, isLocked, duration, thumbnailUrl, notes, notesFileUrl } = req.body;
+    if (!title || !videoUrl) {
+      return res.status(400).json({ error: 'Title and videoUrl are required' });
     }
 
     const lecture = await Lecture.create({
       courseId: course._id,
       title,
       videoId: videoId || '',
-      videoUrl: videoUrl || '',
+      videoUrl: videoUrl,
       orderIndex: orderIndex || 1,
       isLocked: isLocked || false,
       duration: duration || 0,
@@ -324,6 +345,49 @@ router.delete('/users/:id', adminAuth, async (req, res) => {
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ========== VIDEO UPLOAD ==========
+
+// Upload video to S3
+router.post('/upload/video', adminAuth, upload.single('video'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No video file provided' });
+    }
+
+    const fileBuffer = req.file.buffer;
+    const fileName = req.file.originalname;
+    const contentType = req.file.mimetype;
+
+    // Upload to S3
+    const videoUrl = await uploadVideo(fileBuffer, fileName, contentType);
+
+    res.json({
+      success: true,
+      videoUrl,
+      message: 'Video uploaded successfully',
+    });
+  } catch (error) {
+    console.error('Video upload error:', error);
+    res.status(500).json({ error: error.message || 'Failed to upload video' });
+  }
+});
+
+// Delete video from S3 (optional - for cleanup)
+router.delete('/upload/video', adminAuth, async (req, res) => {
+  try {
+    const { videoUrl } = req.body;
+    if (!videoUrl) {
+      return res.status(400).json({ error: 'Video URL is required' });
+    }
+
+    await deleteVideo(videoUrl);
+    res.json({ success: true, message: 'Video deleted successfully' });
+  } catch (error) {
+    console.error('Video delete error:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete video' });
   }
 });
 

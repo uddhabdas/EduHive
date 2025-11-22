@@ -82,22 +82,18 @@ function getOverrideUrlForCourse(c, base) {
 router.get('/courses', async (req, res) => {
   try {
     const PLACEHOLDER_THUMB = 'https://placehold.co/600x338/EEF2F7/475569?text=Course';
-const PLACEHOLDER_DESC = 'Curated YouTube playlist';
     const base = `${req.protocol}://${req.get('host')}`;
     const docs = await Course.find({ isActive: true }).sort({ createdAt: -1 });
     const courses = docs.map((c) => {
       const overrideUrl = getOverrideUrlForCourse(c, base);
       const cleanTitle = (c.title || '').replace(/^\s*NPTEL\s*:?\s*/i, '');
-      const desc = (c.description && c.description.trim()) ? c.description : `About: ${cleanTitle} — curated YouTube playlist`;
+      const desc = (c.description && c.description.trim()) ? c.description : `About: ${cleanTitle}`;
       return ({
         _id: c._id,
         title: cleanTitle,
         description: desc,
         thumbnailUrl: overrideUrl || ((c.thumbnailUrl && c.thumbnailUrl.trim()) ? c.thumbnailUrl : PLACEHOLDER_THUMB),
         lectureCount: typeof c.lectureCount === 'number' ? c.lectureCount : 0,
-        source: c.source || '',
-        sourcePlaylistId: c.sourcePlaylistId || '',
-        playlistUrl: c.sourcePlaylistId ? `https://www.youtube.com/playlist?list=${c.sourcePlaylistId}` : '',
         price: c.price || 0,
         isPaid: c.isPaid || false,
         createdAt: c.createdAt,
@@ -120,7 +116,7 @@ router.get('/courses/:id', async (req, res) => {
     const base = `${req.protocol}://${req.get('host')}`;
     const overrideUrl = getOverrideUrlForCourse(course, base);
     const cleanTitle = (course.title || '').replace(/^\s*NPTEL\s*:?\s*/i, '');
-    const desc = (course.description && course.description.trim()) ? course.description : `About: ${cleanTitle} — curated YouTube playlist`;
+    const desc = (course.description && course.description.trim()) ? course.description : `About: ${cleanTitle}`;
     
     res.json({
       _id: course._id,
@@ -128,9 +124,6 @@ router.get('/courses/:id', async (req, res) => {
       description: desc,
       thumbnailUrl: overrideUrl || ((course.thumbnailUrl && course.thumbnailUrl.trim()) ? course.thumbnailUrl : 'https://placehold.co/600x338/EEF2F7/475569?text=Course'),
       lectureCount: typeof course.lectureCount === 'number' ? course.lectureCount : 0,
-      source: course.source || '',
-      sourcePlaylistId: course.sourcePlaylistId || '',
-      playlistUrl: course.sourcePlaylistId ? `https://www.youtube.com/playlist?list=${course.sourcePlaylistId}` : '',
       price: course.price || 0,
       isPaid: course.isPaid || false,
       createdAt: course.createdAt,
@@ -187,7 +180,7 @@ router.post('/courses/:id/sync-from-player', auth, async (req, res) => {
   try {
     const axios = require('axios');
     const { id } = req.params;
-    const { playlistId, items } = req.body || {};
+    const { items } = req.body || {};
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'items array required' });
@@ -197,9 +190,8 @@ router.post('/courses/:id/sync-from-player', auth, async (req, res) => {
     if (!course) {
       return res.status(404).json({ error: 'Course not found' });
     }
-    if (course.source !== 'youtube') {
-      return res.status(400).json({ error: 'Only YouTube courses support sync' });
-    }
+    // Previously restricted to YouTube-based courses; now generic sync endpoint is disabled.
+    return res.status(400).json({ error: 'Playlist sync is no longer supported' });
 
     let upserts = 0;
     const incomingIds = new Set();
@@ -344,7 +336,6 @@ const UserProgress = require('../models/UserProgress');
 router.get('/courses/recommended', async (req, res) => {
   try {
     const PLACEHOLDER_THUMB = 'https://placehold.co/600x338/EEF2F7/475569?text=Course';
-const PLACEHOLDER_DESC = 'Curated YouTube playlist';
     const base = `${req.protocol}://${req.get('host')}`;
 
     let userId = null;
@@ -373,37 +364,30 @@ const PLACEHOLDER_DESC = 'Curated YouTube playlist';
         .map(({ c }) => {
           const overrideUrl = getOverrideUrlForCourse(c, base);
           const cleanTitle = (c.title || '').replace(/^\s*NPTEL\s*:?\s*/i, '');
-          const desc = (c.description && c.description.trim()) ? c.description : `About: ${cleanTitle} — curated YouTube playlist`;
+          const desc = (c.description && c.description.trim()) ? c.description : `About: ${cleanTitle}`;
           return ({
             _id: c._id,
             title: cleanTitle,
             description: desc,
             thumbnailUrl: overrideUrl || ((c.thumbnailUrl && c.thumbnailUrl.trim()) ? c.thumbnailUrl : PLACEHOLDER_THUMB),
             lectureCount: typeof c.lectureCount === 'number' ? c.lectureCount : 0,
-            source: c.source || '',
-            sourcePlaylistId: c.sourcePlaylistId || '',
-            playlistUrl: c.sourcePlaylistId ? `https://www.youtube.com/playlist?list=${c.sourcePlaylistId}` : '',
             createdAt: c.createdAt,
             updatedAt: c.updatedAt,
           });
         });
     } else {
       result = courses
-        .filter((c) => c.source === 'youtube')
         .slice(0, 4)
         .map((c) => {
           const overrideUrl = getOverrideUrlForCourse(c, base);
           const cleanTitle = (c.title || '').replace(/^\s*NPTEL\s*:?\s*/i, '');
-          const desc = (c.description && c.description.trim()) ? c.description : `About: ${cleanTitle} — curated YouTube playlist`;
+          const desc = (c.description && c.description.trim()) ? c.description : `About: ${cleanTitle}`;
           return ({
             _id: c._id,
             title: cleanTitle,
             description: desc,
             thumbnailUrl: overrideUrl || ((c.thumbnailUrl && c.thumbnailUrl.trim()) ? c.thumbnailUrl : PLACEHOLDER_THUMB),
             lectureCount: typeof c.lectureCount === 'number' ? c.lectureCount : 0,
-            source: c.source || '',
-            sourcePlaylistId: c.sourcePlaylistId || '',
-            playlistUrl: c.sourcePlaylistId ? `https://www.youtube.com/playlist?list=${c.sourcePlaylistId}` : '',
             createdAt: c.createdAt,
             updatedAt: c.updatedAt,
           });

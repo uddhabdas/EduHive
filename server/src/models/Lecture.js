@@ -4,7 +4,8 @@ const lectureSchema = new mongoose.Schema(
   {
     courseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', required: true, index: true },
     title: { type: String, required: true, trim: true },
-    videoId: { type: String, required: true, trim: true },
+    // Optional legacy field from old YouTube-based implementation. Kept for backward compatibility.
+    videoId: { type: String, default: '', trim: true },
     videoUrl: { type: String, default: '' },
     orderIndex: { type: Number, default: 1 },
     isLocked: { type: Boolean, default: false },

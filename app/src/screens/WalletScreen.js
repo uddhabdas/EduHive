@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, Pressable, RefreshControl, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import HeaderBar from '../components/HeaderBar';
 import { api } from '../api/client';
@@ -12,6 +12,7 @@ export default function WalletScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedTx, setSelectedTx] = useState(null);
 
   const loadData = async () => {
     try {
@@ -81,14 +82,14 @@ export default function WalletScreen({ navigation }) {
         <View className="px-4 pt-6 pb-8">
           {/* Wallet Balance Card - Enhanced */}
           <View 
-            className="rounded-3xl p-6 mb-6 overflow-hidden" 
+            className="rounded-2xl p-5 mb-5 overflow-hidden" 
             style={{ 
               backgroundColor: '#10B981',
               shadowColor: '#000', 
-              shadowOffset: { width: 0, height: 8 }, 
+              shadowOffset: { width: 0, height: 4 }, 
               shadowOpacity: 0.15, 
-              shadowRadius: 16, 
-              elevation: 8 
+              shadowRadius: 12, 
+              elevation: 5 
             }}
           >
             <View className="flex-row items-center justify-between mb-4">
@@ -116,13 +117,13 @@ export default function WalletScreen({ navigation }) {
           </View>
 
           {/* Quick Actions - Enhanced */}
-          <View className="mb-6">
-            <Text className="text-lg font-bold text-neutral-900 dark:text-white mb-3 px-1">Quick Actions</Text>
+          <View className="mb-5">
+            <Text className="text-base font-bold text-neutral-900 dark:text-white mb-3 px-1" style={{ fontSize: 16 }}>Quick Actions</Text>
             <View className="flex-row gap-3">
               <Pressable
                 onPress={() => navigation.navigate('WalletTopUp')}
-                className="flex-1 bg-white dark:bg-neutral-900 rounded-2xl p-5 items-center"
-                style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 4 }}
+                className="flex-1 bg-white dark:bg-neutral-900 rounded-xl p-4 items-center"
+                style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 }}
               >
                 <View className="w-14 h-14 bg-emerald-100 dark:bg-emerald-900/30 rounded-full items-center justify-center mb-3">
                   <MaterialCommunityIcons name="plus-circle" size={28} color="#10B981" />
@@ -132,8 +133,8 @@ export default function WalletScreen({ navigation }) {
               </Pressable>
               <Pressable
                 onPress={() => navigation.navigate('Courses')}
-                className="flex-1 bg-white dark:bg-neutral-900 rounded-2xl p-5 items-center"
-                style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 4 }}
+                className="flex-1 bg-white dark:bg-neutral-900 rounded-xl p-4 items-center"
+                style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 }}
               >
                 <View className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-full items-center justify-center mb-3">
                   <MaterialCommunityIcons name="book-open-variant" size={28} color="#3B82F6" />
@@ -145,17 +146,17 @@ export default function WalletScreen({ navigation }) {
           </View>
 
           {/* Transaction History - Enhanced */}
-          <View className="bg-white dark:bg-neutral-900 rounded-2xl overflow-hidden" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 4 }}>
-            <View className="px-5 py-5 border-b border-neutral-200 dark:border-neutral-800">
-              <Text className="text-xl font-bold text-neutral-900 dark:text-white">Transaction History</Text>
-              <Text className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+          <View className="bg-white dark:bg-neutral-900 rounded-xl overflow-hidden" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 }}>
+            <View className="px-4 py-4 border-b border-neutral-200 dark:border-neutral-800">
+              <Text className="text-base font-bold text-neutral-900 dark:text-white" style={{ fontSize: 16 }}>Transaction History</Text>
+              <Text className="text-xs text-neutral-500 dark:text-neutral-400 mt-1" style={{ fontSize: 12 }}>
                 {transactions.length} {transactions.length === 1 ? 'transaction' : 'transactions'}
               </Text>
             </View>
             
             {loading ? (
               <View className="p-12 items-center">
-                <MaterialCommunityIcons name="loading" size={32} color="#9CA3AF" />
+                <MaterialCommunityIcons name="clock-outline" size={32} color="#9CA3AF" />
                 <Text className="text-neutral-500 dark:text-neutral-400 mt-4">Loading transactions...</Text>
               </View>
             ) : transactions.length === 0 ? (
@@ -179,7 +180,8 @@ export default function WalletScreen({ navigation }) {
                 {transactions.map((tx, index) => (
                   <Pressable
                     key={tx._id}
-                    className={`px-5 py-4 ${index < transactions.length - 1 ? 'border-b border-neutral-100 dark:border-neutral-800' : ''} flex-row items-center justify-between`}
+                    onPress={() => setSelectedTx(tx)}
+                    className={`px-4 py-3 ${index < transactions.length - 1 ? 'border-b border-neutral-100 dark:border-neutral-800' : ''} flex-row items-center justify-between`}
                     style={{ backgroundColor: tx.status === 'pending' ? 'rgba(245, 158, 11, 0.05)' : 'transparent' }}
                   >
                     <View className="flex-1 flex-row items-center">
@@ -194,10 +196,10 @@ export default function WalletScreen({ navigation }) {
                         />
                       </View>
                       <View className="flex-1">
-                        <Text className="text-base font-bold text-neutral-900 dark:text-white">
+                        <Text className="text-sm font-bold text-neutral-900 dark:text-white" style={{ fontSize: 14 }}>
                           {tx.type === 'credit' ? 'Money Added' : 'Course Purchase'}
                         </Text>
-                        <Text className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
+                        <Text className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5" style={{ fontSize: 11 }}>
                           {new Date(tx.createdAt).toLocaleDateString('en-IN', {
                             day: 'numeric',
                             month: 'short',
@@ -230,9 +232,10 @@ export default function WalletScreen({ navigation }) {
                     </View>
                     <View className="items-end ml-3">
                       <Text
-                        className={`text-xl font-extrabold ${
+                        className={`font-bold ${
                           tx.type === 'credit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
                         }`}
+                        style={{ fontSize: 16, fontWeight: '700' }}
                       >
                         {tx.type === 'credit' ? '+' : '-'}₹{tx.amount.toFixed(2)}
                       </Text>
@@ -244,7 +247,122 @@ export default function WalletScreen({ navigation }) {
           </View>
         </View>
       </ScrollView>
+
+      {/* Transaction details modal */}
+      <Modal
+        visible={!!selectedTx}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedTx(null)}
+      >
+        <View className="flex-1 bg-black/40 justify-end">
+          <View className="bg-white dark:bg-neutral-900 rounded-t-3xl p-6" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 8 }}>
+            {selectedTx && (
+              <>
+                <View className="items-center mb-4">
+                  <View
+                    className="w-12 h-12 rounded-full items-center justify-center mb-3"
+                    style={{ backgroundColor: getStatusColor(selectedTx.status) + '15' }}
+                  >
+                    <MaterialCommunityIcons
+                      name={selectedTx.type === 'credit' ? 'arrow-down-bold' : 'arrow-up-bold'}
+                      size={24}
+                      color={getStatusColor(selectedTx.status)}
+                    />
+                  </View>
+                  <Text
+                    className={`text-3xl font-extrabold ${
+                      selectedTx.type === 'credit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
+                    {selectedTx.type === 'credit' ? '+' : '-'}₹{selectedTx.amount.toFixed(2)}
+                  </Text>
+                  <View className="mt-2 flex-row items-center px-3 py-1 rounded-full" style={{ backgroundColor: getStatusColor(selectedTx.status) + '15' }}>
+                    <MaterialCommunityIcons
+                      name={getStatusIcon(selectedTx.status)}
+                      size={14}
+                      color={getStatusColor(selectedTx.status)}
+                    />
+                    <Text
+                      className="text-xs font-semibold ml-1.5 capitalize"
+                      style={{ color: getStatusColor(selectedTx.status) }}
+                    >
+                      {selectedTx.status}
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="mb-3">
+                  <Text className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-1">TYPE</Text>
+                  <Text className="text-base font-semibold text-neutral-900 dark:text-white">
+                    {selectedTx.type === 'credit' ? 'Money Added' : 'Course Purchase'}
+                  </Text>
+                </View>
+
+                <View className="mb-3">
+                  <Text className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-1">DATE & TIME</Text>
+                  <Text className="text-base text-neutral-900 dark:text-neutral-100">
+                    {new Date(selectedTx.createdAt).toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                </View>
+
+                {selectedTx.description ? (
+                  <View className="mb-3">
+                    <Text className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-1">DESCRIPTION</Text>
+                    <Text className="text-base text-neutral-900 dark:text-neutral-100">
+                      {selectedTx.description}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {selectedTx.utrNumber ? (
+                  <View className="mb-3">
+                    <Text className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-1">UTR NUMBER</Text>
+                    <View className="px-3 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800">
+                      <Text className="text-sm font-mono text-neutral-800 dark:text-neutral-100">
+                        {selectedTx.utrNumber}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {selectedTx.transactionId ? (
+                  <View className="mb-4">
+                    <Text className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-1">TRANSACTION ID</Text>
+                    <View className="px-3 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800">
+                      <Text className="text-sm font-mono text-neutral-800 dark:text-neutral-100">
+                        {selectedTx.transactionId}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                <Pressable
+                  onPress={() => setSelectedTx(null)}
+                  className="mt-2 rounded-xl items-center justify-center"
+                  style={{
+                    minHeight: 48,
+                    backgroundColor: '#10B981',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 8,
+                    elevation: 5,
+                  }}
+                >
+                  <Text className="text-white font-bold text-base">Close</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
-

@@ -21,9 +21,11 @@ function RootNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {token ? (
         <>
+          <Stack.Screen name="Explore" component={require('./src/screens/ExploreScreen').default} options={{ headerShown: false }} />
           <Stack.Screen name="Courses" component={require('./src/screens/CoursesScreen').default} />
           <Stack.Screen name="CourseDetail" component={require('./src/screens/CourseDetailScreen').default} />
           <Stack.Screen name="Profile" component={require('./src/screens/ProfileScreen').default} />
+          <Stack.Screen name="EditProfile" component={require('./src/screens/EditProfileScreen').default} />
           <Stack.Screen name="Settings" component={require('./src/screens/SettingsScreen').default} />
           <Stack.Screen name="Cart" component={require('./src/screens/CartScreen').default} />
           <Stack.Screen name="AboutCourse" component={require('./src/screens/AboutCourseScreen').default} />

@@ -86,6 +86,35 @@ app.get('/api/me', auth, async (req, res) => {
   }
 });
 
+// Update own profile (protected)
+app.put('/api/me', auth, async (req, res) => {
+  try {
+    const User = require('./models/User');
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'Not found' });
+
+    const { name, email } = req.body;
+
+    if (name !== undefined && name !== null) {
+      user.name = name.trim();
+    }
+    
+    if (email && email.trim() && email.trim() !== user.email) {
+      const existing = await User.findOne({ email: email.trim() });
+      if (existing) return res.status(409).json({ error: 'Email already exists' });
+      user.email = email.trim();
+    }
+
+    await user.save();
+    const userObj = user.toObject();
+    delete userObj.password;
+    res.json(userObj);
+  } catch (e) {
+    console.error('PUT /api/me error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 
 async function start() {

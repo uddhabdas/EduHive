@@ -52,16 +52,16 @@ export default function CourseCard({ course, onPress, wide = false }) {
       onPressOut={onUp}
       accessibilityLabel={`Open course ${course.title}`}
       className={clsx(
-        'bg-white dark:bg-neutral-900 rounded-2xl overflow-hidden',
-        wide ? 'mr-4' : 'flex-1 mb-4'
+        'bg-white dark:bg-neutral-900 rounded-xl overflow-hidden',
+        wide ? 'mr-3' : 'flex-1 mb-3'
       )}
       style={{
         width: wide ? 280 : undefined,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.06,
-        shadowRadius: 25,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 3,
       }}
     >
       <View>
@@ -74,34 +74,61 @@ export default function CourseCard({ course, onPress, wide = false }) {
           onError={() => setImgIndex((i) => i + 1)}
           />
         ) : (
-          <View className="w-full" style={{ aspectRatio: 16/9, backgroundColor: '#EEF2F7' }} />
+          <View className="w-full items-center justify-center" style={{ aspectRatio: 16/9, backgroundColor: '#EEF2F7' }}>
+            <MaterialCommunityIcons name="book-open-variant" size={48} color="#9CA3AF" />
+          </View>
         )}
         {/* gradient overlay (lighter) */}
         {thumb && (
           <LinearGradient colors={["transparent","rgba(0,0,0,0.25)"]} style={{ position:'absolute', left:0, right:0, bottom:0, height:48 }} />
         )}
         {/* price badge */}
-        <LinearGradient colors={["#14B8A6","#10B981"]} style={{ position:'absolute', left:8, top:8, borderRadius:12, paddingHorizontal:8, paddingVertical:4 }}>
-          <Text className="text-white text-xs font-semibold">{price === 0 ? 'Free' : `₹${price}`}</Text>
-        </LinearGradient>
+        <View 
+          style={{ 
+            position:'absolute', 
+            left:10, 
+            top:10, 
+            backgroundColor: price === 0 ? '#10B981' : '#3B82F6',
+            borderRadius:8, 
+            paddingHorizontal:8, 
+            paddingVertical:4,
+          }}
+        >
+          <Text className="text-white text-xs font-bold" style={{ fontSize: 11, fontWeight: '700' }}>
+            {price === 0 ? 'Free' : `₹${price}`}
+          </Text>
+        </View>
         {/* cart quick add */}
-        <Pressable onPress={() => add({ ...course, price })} accessibilityLabel="Add to cart" style={{ position:'absolute', right:8, top:8, backgroundColor:'rgba(255,255,255,0.95)', borderRadius:20, width:36, height:36, alignItems:'center', justifyContent:'center' }}>
-          <MaterialCommunityIcons name="cart-plus" size={20} color="#111827" />
+        <Pressable 
+          onPress={() => add({ ...course, price })} 
+          accessibilityLabel="Add to cart" 
+          style={{ 
+            position:'absolute', 
+            right:10, 
+            top:10, 
+            backgroundColor:'rgba(255,255,255,0.9)', 
+            borderRadius:18, 
+            width:36, 
+            height:36, 
+            alignItems:'center', 
+            justifyContent:'center',
+          }}
+        >
+          <MaterialCommunityIcons name="cart-plus" size={20} color="#10B981" />
         </Pressable>
       </View>
-      <View className="p-4">
-        <View className="flex-row items-start justify-between">
-          <Text className="flex-1 text-lg font-bold text-neutral-900 dark:text-white" numberOfLines={2}>
-            {(course.title || '').replace(/^\s*NPTEL\s*:?\s*/i, '')}
+      <View className="p-3">
+        <Text className="text-sm font-bold text-neutral-900 dark:text-white mb-1.5" numberOfLines={2} style={{ fontSize: 15, lineHeight: 20 }}>
+          {(course.title || '').replace(/^\s*NPTEL\s*:?\s*/i, '')}
+        </Text>
+        <View className="flex-row items-center mt-1.5">
+          <MaterialCommunityIcons name="star" size={14} color="#FBBF24" />
+          <Text className="text-xs text-neutral-600 dark:text-neutral-400 ml-1" style={{ fontSize: 12 }}>
+            {course.lectureCount && course.lectureCount > 0 ? `${course.lectureCount} lectures` : 'Playlist'}
           </Text>
-          <Text className="ml-2 text-sm font-extrabold text-brand">{price === 0 ? 'Free' : `₹${price}`}</Text>
-        </View>
-        <View className="flex-row items-center gap-2 mt-1">
-          <MaterialCommunityIcons name="play-circle" size={14} color="#10B981" />
-          <Text className="text-xs text-neutral-500 dark:text-neutral-400">{course.lectureCount && course.lectureCount > 0 ? `${course.lectureCount} lectures` : 'Playlist'}</Text>
         </View>
         {course.description ? (
-          <Text className="text-sm text-neutral-500 dark:text-neutral-400 mt-1" numberOfLines={1}>
+          <Text className="text-xs text-neutral-500 dark:text-neutral-400 mt-1.5" numberOfLines={1} style={{ fontSize: 11, lineHeight: 14 }}>
             {course.description}
           </Text>
         ) : null}

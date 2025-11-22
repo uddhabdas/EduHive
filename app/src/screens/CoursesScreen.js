@@ -83,6 +83,8 @@ export default function CoursesScreen({ navigation }) {
         thumbnailUrl: item.thumbnailUrl,
         description: item.description,
         sourcePlaylistId: item.sourcePlaylistId,
+        price: item.price,
+        isPaid: item.isPaid,
       })}
     />
   );
@@ -90,7 +92,11 @@ export default function CoursesScreen({ navigation }) {
   if (loading) {
     return (
       <View className="flex-1 bg-bg-light dark:bg-bg-dark">
-        <HeaderBar onSearch={() => {}} onProfile={() => {}} />
+        <HeaderBar
+          onSearch={() => {}}
+          onCart={() => navigation.navigate('Cart')}
+          onProfile={() => navigation.navigate('Profile')}
+        />
         <View className="px-4 pt-4">
           <View className="flex-row gap-3">
             <SkeletonCourseCard wide />
@@ -141,16 +147,19 @@ export default function CoursesScreen({ navigation }) {
           <>
             {/* Recommended Section */}
             {recommendedToShow.length > 0 && (
-              <View className="mb-5">
-                <Text className="text-xl font-extrabold text-neutral-900 dark:text-white px-4 mb-3">
-                  Recommended
-                </Text>
+              <View className="mb-5 px-4">
+                <View className="flex-row items-center justify-between mb-3">
+                  <Text className="text-lg font-bold text-neutral-900 dark:text-white" style={{ fontSize: 18 }}>
+                    Recommended
+                  </Text>
+                  <MaterialCommunityIcons name="star" size={18} color="#F59E0B" />
+                </View>
                 <FlatList
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingHorizontal: 16 }}
+                  contentContainerStyle={{ paddingRight: 16 }}
                   data={recommendedToShow}
-                  keyExtractor={(item) => `rec-${item._id}`}
+                  keyExtractor={(item) => `rec-${item._id || Math.random()}`}
                   renderItem={({ item }) => (
                     <CourseCard
                       wide
@@ -161,6 +170,8 @@ export default function CoursesScreen({ navigation }) {
                         thumbnailUrl: item.thumbnailUrl,
                         description: item.description,
                         sourcePlaylistId: item.sourcePlaylistId,
+                        price: item.price,
+                        isPaid: item.isPaid,
                       })}
                     />
                   )}
@@ -169,32 +180,56 @@ export default function CoursesScreen({ navigation }) {
             )}
 
             {/* All Courses Grid */}
-            <View className="px-4 pb-4">
-              <Text className="text-xl font-extrabold text-neutral-900 dark:text-white mb-3">
-                All Courses
-              </Text>
+            <View className="px-4 pb-6">
+              <View className="flex-row items-center justify-between mb-3">
+                <Text className="text-lg font-bold text-neutral-900 dark:text-white" style={{ fontSize: 18 }}>
+                  All Courses
+                </Text>
+                <Text className="text-xs text-neutral-500 dark:text-neutral-400" style={{ fontSize: 12 }}>
+                  {allCourses.length} {allCourses.length === 1 ? 'course' : 'courses'}
+                </Text>
+              </View>
               <FlatList
                 numColumns={2}
-                columnWrapperStyle={{ gap: 12 }}
+                columnWrapperStyle={{ gap: 10, marginBottom: 10 }}
                 scrollEnabled={false}
                 removeClippedSubviews={false}
                 initialNumToRender={allCourses.length}
                 data={allCourses}
-                keyExtractor={(item, idx) => `grid-${item._id}-${idx}`}
+                keyExtractor={(item, idx) => `grid-${item._id || idx}`}
                 renderItem={renderGridItem}
+                ListEmptyComponent={
+                  <View className="py-8 items-center">
+                    <MaterialCommunityIcons name="book-open-variant" size={48} color="#9CA3AF" />
+                    <Text className="text-neutral-500 dark:text-neutral-400 mt-2 text-center">
+                      No courses found
+                    </Text>
+                  </View>
+                }
               />
             </View>
           </>
         )}
         {/* FAB Refresh */}
-        <Pressable
-          onPress={() => { setRefreshing(true); load(); }}
-          className="absolute bottom-6 right-6 rounded-full items-center justify-center"
-          style={{ width: 56, height: 56, backgroundColor: '#10B981', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 6 }}
-          accessibilityLabel="Refresh"
-        >
-          <MaterialCommunityIcons name="refresh" size={26} color="#fff" />
-        </Pressable>
+        {!loading && (
+          <Pressable
+            onPress={() => { setRefreshing(true); load(); }}
+            className="absolute bottom-6 right-6 rounded-full items-center justify-center"
+            style={{ 
+              width: 56, 
+              height: 56, 
+              backgroundColor: '#10B981', 
+              shadowColor: '#000', 
+              shadowOffset: { width: 0, height: 8 }, 
+              shadowOpacity: 0.12, 
+              shadowRadius: 16, 
+              elevation: 6 
+            }}
+            accessibilityLabel="Refresh"
+          >
+            <MaterialCommunityIcons name="refresh" size={26} color="#fff" />
+          </Pressable>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

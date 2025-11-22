@@ -1,5 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
+// Using expo-av for now (will migrate to expo-video in future SDK)
+// Note: expo-av is deprecated but still works in current SDK
 import { Video } from 'expo-av';
 
 export default function LocalVideoPlayer({ uri, start = 0, onTick, onEnded, onReady, style }) {

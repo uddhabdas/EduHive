@@ -18,29 +18,53 @@ export default function MyCoursesScreen({ navigation }) {
     setError(null);
     try {
       const purchasesRes = await api.get('/api/purchases');
-      const purchasedCourses = purchasesRes.data.map((p) => p.courseId).filter(Boolean);
+      console.log('Purchases response:', purchasesRes.data);
+      
+      // The courseId is already populated by the server
+      const purchasedCourses = purchasesRes.data
+        .map((p) => {
+          // If courseId is populated (object), use it directly
+          if (p.courseId && typeof p.courseId === 'object') {
+            return p.courseId;
+          }
+          // If courseId is just an ID string, we need to fetch it
+          return p.courseId;
+        })
+        .filter(Boolean);
       
       if (purchasedCourses.length === 0) {
         setCourses([]);
+        setLoading(false);
+        setRefreshing(false);
         return;
       }
 
-      // Fetch course details for purchased courses
+      // Fetch course details for courses that are just IDs
       const courseDetails = await Promise.all(
         purchasedCourses.map(async (course) => {
+          // If it's already a full course object, return it
+          if (course && typeof course === 'object' && course.title) {
+            return course;
+          }
+          // Otherwise, fetch it
           try {
-            const res = await api.get(`/api/courses/${course._id || course}`);
+            const courseId = course._id || course;
+            const res = await api.get(`/api/courses/${courseId}`);
             return res.data;
           } catch (e) {
+            console.warn('Failed to fetch course:', course, e);
             return null;
           }
         })
       );
 
-      setCourses(courseDetails.filter(Boolean));
+      const validCourses = courseDetails.filter(Boolean);
+      console.log('Loaded courses:', validCourses.length);
+      setCourses(validCourses);
     } catch (e) {
       console.error('Failed to load purchased courses:', e);
-      setError('Failed to load your courses');
+      console.error('Error details:', e.response?.data);
+      setError('Failed to load your courses. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -84,10 +108,12 @@ export default function MyCoursesScreen({ navigation }) {
         className="flex-1"
       >
         <View className="px-4 pt-4 pb-6">
-          <Text className="text-2xl font-bold text-neutral-900 dark:text-white mb-1">My Courses</Text>
-          <Text className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
-            {courses.length} {courses.length === 1 ? 'course' : 'courses'} purchased
-          </Text>
+          <View className="flex-row items-center justify-between mb-4">
+            <Text className="text-2xl font-extrabold text-neutral-900 dark:text-white">My Courses</Text>
+            <Text className="text-sm text-neutral-500 dark:text-neutral-400">
+              {courses.length} {courses.length === 1 ? 'course' : 'courses'}
+            </Text>
+          </View>
 
           {courses.length === 0 ? (
             <EmptyState
@@ -99,10 +125,10 @@ export default function MyCoursesScreen({ navigation }) {
           ) : (
             <FlatList
               numColumns={2}
-              columnWrapperStyle={{ gap: 12 }}
+              columnWrapperStyle={{ gap: 12, marginBottom: 12 }}
               scrollEnabled={false}
               data={courses}
-              keyExtractor={(item) => `mycourse-${item._id}`}
+              keyExtractor={(item) => `mycourse-${item._id || Math.random()}`}
               renderItem={({ item }) => (
                 <CourseCard
                   course={item}
@@ -112,6 +138,8 @@ export default function MyCoursesScreen({ navigation }) {
                     thumbnailUrl: item.thumbnailUrl,
                     description: item.description,
                     sourcePlaylistId: item.sourcePlaylistId,
+                    price: item.price,
+                    isPaid: item.isPaid,
                   })}
                 />
               )}
